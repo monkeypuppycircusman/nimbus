@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NIMBUS — Cloud Pad Synth</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=DM+Mono:wght@300;400&family=Cormorant+Garamond:ital,wght@0,300;1,300;1,400&display=swap');
+
+:root {
+  --void:    #03020a;
+  --deep:    #07050f;
+  --murk:    #0d0a1a;
+  --fog:     #151028;
+  --mist:    #1e1830;
+  --ecto:    #7affcc;
+  --ecto2:   #a8ffe0;
+  --soul:    #c060ff;
+  --soul2:   #e090ff;
+  --cloud:   #ff5500;
+  --cloud2:  #ff8040;
+  --cloud3:  #ffb090;
+  --cloud-dim:#2a0e00;
+  --rise:    #ffa020;
+  --rise2:   #ffcc60;
+  --sky:     #4080ff;
+  --sky2:    #80aaff;
+  --text:    #8a8598;
+  --text2:   #504860;
+  --text3:   #2a2438;
+  --mono:   'DM Mono', monospace;
+  --serif:  'Cormorant Garamond', serif;
+  --goth:   'UnifrakturMaguntia', cursive;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%;
+  background: var(--void);
+  overflow: hidden;
+  font-family: var(--mono);
+  cursor: none;
+}
+
+#cursor {
+  position: fixed; width: 26px; height: 26px;
+  pointer-events: none; z-index: 9999;
+  transform: translate(-50%, -50%);
+}
+#cursor svg { width: 100%; height: 100%; }
+
+#atmos { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+
+#app {
+  position: relative; width: 100vw; height: 100vh;
+  display: flex; flex-direction: column; z-index: 1;
+}
+
+/* ── HEADER ── */
+#hdr {
+  flex-shrink: 0; padding: 18px 28px 14px;
+  display: flex; align-items: baseline; gap: 18px;
+  border-bottom: 1px solid var(--text3);
+  background: linear-gradient(180deg, rgba(7,5,15,.97) 0%, transparent 100%);
+  position: relative; z-index: 2;
+}
+#logo {
+  font-family: var(--goth); font-size: 36px;
+  color: var(--cloud);
+  text-shadow: 0 0 24px var(--cloud), 0 0 70px rgba(255,85,0,.25);
+  letter-spacing: 4px; line-height: 1;
+}
+#logo-sub {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 3px;
+  color: var(--text3); text-transform: uppercase;
+}
+#hdr-stats { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.hstat { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; color: var(--text3); text-transform: uppercase; }
+.hstat span { color: var(--text2); transition: color .1s; }
+.hstat span.lit       { color: var(--cloud3);  text-shadow: 0 0 8px var(--cloud); }
+.hstat span.lit-rise  { color: var(--rise2);   text-shadow: 0 0 8px var(--rise); }
+.hstat span.lit-sky   { color: var(--sky2);    text-shadow: 0 0 8px var(--sky); }
+#power-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text3); transition: all .3s; }
+#power-dot.on { background: var(--cloud); box-shadow: 0 0 8px var(--cloud), 0 0 24px rgba(255,85,0,.5); }
+
+/* ── MAIN ── */
+#main { flex: 1; display: flex; overflow: hidden; position: relative; }
+#main::before {
+  content: ''; position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,85,0,.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,85,0,.012) 1px, transparent 1px);
+  background-size: 60px 50px; pointer-events: none;
+}
+
+/* ── XY PAD ── */
+#xy-section {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 16px 20px; gap: 12px;
+  position: relative; z-index: 1;
+}
+
+#xy-wrap {
+  position: relative;
+  width: 100%; max-width: 580px;
+  flex: 1; max-height: 360px;
+}
+
+#xy-pad {
+  width: 100%; height: 100%;
+  border: 1px solid var(--text3);
+  border-radius: 4px;
+  background: var(--deep);
+  position: relative;
+  cursor: crosshair;
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* Cloud texture overlay */
+#xy-pad::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 30% 60%, rgba(255,85,0,.04) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 70% 35%, rgba(64,128,255,.03) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 60% at 55% 75%, rgba(192,96,255,.025) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* Axis labels */
+.xy-label {
+  position: absolute;
+  font-family: var(--mono); font-size: 7px;
+  letter-spacing: 2px; color: var(--text3); text-transform: uppercase;
+  pointer-events: none;
+}
+#xy-x-lo  { bottom: 8px; left: 12px; }
+#xy-x-hi  { bottom: 8px; right: 12px; }
+#xy-y-lo  { right: 8px; bottom: 18px; writing-mode: vertical-rl; }
+#xy-y-hi  { right: 8px; top: 18px; writing-mode: vertical-rl; }
+
+/* The cloud cursor */
+#xy-thumb {
+  position: absolute;
+  width: 48px; height: 48px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: width .1s, height .1s;
+}
+#xy-thumb svg { width: 100%; height: 100%; }
+#xy-thumb.active { width: 64px; height: 64px; }
+
+/* Ripple rings on touch */
+.xy-ripple {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255,85,0,.5);
+  pointer-events: none;
+  animation: xyring .8s ease-out forwards;
+}
+@keyframes xyring {
+  0%   { width: 10px; height: 10px; opacity: .8; margin: -5px; }
+  100% { width: 80px; height: 80px; opacity: 0; margin: -40px; }
+}
+
+/* Trail canvas inside xy */
+#trail-canvas {
+  position: absolute; inset: 0; pointer-events: none;
+  border-radius: 3px;
+}
+
+/* ── KEYBOARD ── */
+#keyboard-section {
+  width: 100%; max-width: 580px;
+  flex-shrink: 0; position: relative;
+}
+
+#keyboard {
+  display: flex; height: 80px;
+  border: 1px solid var(--text3);
+  border-radius: 0 0 3px 3px;
+  overflow: hidden; position: relative;
+  background: var(--deep);
+}
+
+.key { position: relative; cursor: pointer; flex-shrink: 0; transition: background .04s; }
+.key.white {
+  background: linear-gradient(180deg,#0e0c1e 0%,#080612 100%);
+  border-right: 1px solid var(--text3); flex: 1; z-index: 1;
+}
+.key.white:hover { background: linear-gradient(180deg,#1a1430 0%,#120e24 100%); }
+.key.white.active {
+  background: linear-gradient(180deg, rgba(255,85,0,.5) 0%, rgba(160,40,0,.35) 100%) !important;
+  box-shadow: inset 0 -2px 12px rgba(255,85,0,.3);
+}
+.key.black {
+  background: linear-gradient(180deg,#04040e 0%,#080818 100%);
+  position: absolute; width: 60%; height: 60%; top: 0; z-index: 2;
+  border-radius: 0 0 3px 3px;
+  border: 1px solid var(--text3); border-top: none;
+}
+.key.black:hover { background: linear-gradient(180deg,#100c20 0%,#14102a 100%); }
+.key.black.active {
+  background: rgba(255,85,0,.3) !important;
+  box-shadow: 0 0 10px rgba(255,85,0,.3);
+}
+.key-lbl {
+  position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+  font-family: var(--mono); font-size: 7px; color: var(--text3);
+  pointer-events: none; user-select: none;
+}
+.key.active .key-lbl { color: rgba(0,0,0,.35); }
+
+/* Mod strip above keyboard */
+#mod-strip {
+  width: 100%; max-width: 580px; flex-shrink: 0;
+  height: 22px; border: 1px solid var(--text3); border-bottom: none;
+  background: var(--void); overflow: hidden; position: relative;
+}
+#mod-fill {
+  position: absolute; top: 0; left: 0; bottom: 0;
+  background: linear-gradient(90deg, rgba(255,85,0,.25), rgba(255,160,32,.15));
+  width: 0%; transition: width .08s;
+  border-right: 1px solid rgba(255,85,0,.4);
+}
+#mod-label {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  font-family: var(--mono); font-size: 7px; letter-spacing: 2px;
+  color: var(--text3); text-transform: uppercase; pointer-events: none;
+}
+#mod-val {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  font-family: var(--mono); font-size: 7px; color: var(--text2);
+  pointer-events: none;
+}
+
+/* OCT WHEEL */
+#oct-outer {
+  position: absolute; left: -48px; top: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+#oct-wheel {
+  width: 32px; height: 80px; background: var(--void);
+  border: 1px solid var(--text3); border-radius: 4px;
+  overflow: hidden; cursor: ns-resize; position: relative; user-select: none;
+}
+#oct-wheel-inner { position: absolute; top: 0; left: 0; right: 0; transition: transform .14s cubic-bezier(.22,.68,0,1.2); }
+.ow-slot {
+  height: 18px; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 8px; color: var(--text3);
+  border-bottom: 1px solid var(--text3); flex-shrink: 0;
+}
+.ow-slot.cur { color: var(--cloud); background: rgba(255,85,0,.06); }
+#oct-wheel::before,#oct-wheel::after { content:'';position:absolute;left:0;right:0;height:12px;z-index:2;pointer-events:none; }
+#oct-wheel::before { top:0;background:linear-gradient(to bottom,var(--void),transparent); }
+#oct-wheel::after  { bottom:0;background:linear-gradient(to top,var(--void),transparent); }
+#oct-lbl { font-family:var(--mono);font-size:7px;color:var(--text3);text-transform:uppercase;letter-spacing:1px; }
+
+/* ── WAVEFORM ── */
+#wave-bar {
+  flex-shrink: 0; height: 52px; background: var(--deep);
+  border-top: 1px solid var(--text3); position: relative; z-index: 2; overflow: hidden;
+}
+#wave-canvas { width:100%;height:100%;display:block; }
+
+/* ── CONTROLS ── */
+#controls {
+  flex-shrink: 0;
+  background: linear-gradient(0deg, rgba(7,5,15,.98) 0%, transparent 100%);
+  border-top: 1px solid var(--text3);
+  padding: 10px 24px 14px;
+  display: flex; align-items: center; gap: 18px;
+  position: relative; z-index: 2; flex-wrap: wrap;
+}
+.cdiv { width:1px;height:32px;background:var(--text3);flex-shrink:0; }
+.kg { display:flex;flex-direction:column;align-items:center;gap:3px; }
+canvas.knob { cursor:ns-resize;display:block; }
+.kl { font-family:var(--mono);font-size:7px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3); }
+.kv { font-family:var(--mono);font-size:9px;color:var(--text2);min-width:32px;text-align:center; }
+
+.cloud-btn {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+  padding: 5px 12px; border: 1px solid var(--text3); border-radius: 3px;
+  color: var(--text2); background: transparent; cursor: pointer; transition: all .15s;
+}
+.cloud-btn:hover { color: var(--cloud3); border-color: var(--cloud2); }
+.cloud-btn.active {
+  color: var(--cloud2); border-color: var(--cloud);
+  background: rgba(255,85,0,.06);
+  text-shadow: 0 0 8px rgba(255,85,0,.5);
+}
+
+.vibe-btn {
+  font-family: var(--serif); font-style: italic; font-size: 13px;
+  color: var(--text2); background: transparent;
+  border: 1px solid var(--text3); border-radius: 3px;
+  padding: 4px 10px; cursor: pointer; transition: all .15s;
+}
+.vibe-btn:hover { color: var(--rise2); border-color: var(--rise); }
+.vibe-btn.active { color: var(--rise2); border-color: var(--rise); background: rgba(255,160,32,.06); }
+
+#note-display { margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:2px; }
+#note-name {
+  font-family: var(--serif); font-size: 26px; font-style: italic; font-weight: 300;
+  color: var(--cloud2); text-shadow: 0 0 16px var(--cloud);
+  line-height: 1; min-width: 60px; text-align: right; transition: color .05s;
+}
+#freq-display { font-family:var(--mono);font-size:9px;color:var(--text2);letter-spacing:1px; }
+#vibe-display { font-family:var(--serif);font-style:italic;font-size:11px;color:rgba(255,85,0,.4);letter-spacing:.5px; }
+
+::-webkit-scrollbar { display:none; }
+</style>
+</head>
+<body>
+
+<!-- Cursor: cloud -->
+<div id="cursor">
+  <svg viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg">
+    <path d="M6 17 C6 17 4 17 4 15 C4 13 6 12 8 13 C8 10 11 8 14 9 C15 7 18 7 19 9 C21 9 23 11 22 13 C23 14 23 17 21 17 Z"
+      fill="none" stroke="rgba(255,85,0,.8)" stroke-width="1" stroke-linejoin="round"/>
+    <line x1="9"  y1="21" x2="9"  y2="19" stroke="rgba(255,85,0,.4)" stroke-width=".8" stroke-linecap="round"/>
+    <line x1="13" y1="22" x2="13" y2="19" stroke="rgba(255,85,0,.4)" stroke-width=".8" stroke-linecap="round"/>
+    <line x1="17" y1="21" x2="17" y2="19" stroke="rgba(255,85,0,.4)" stroke-width=".8" stroke-linecap="round"/>
+  </svg>
+</div>
+
+<canvas id="atmos"></canvas>
+
+<div id="app">
+  <div id="hdr">
+    <div>
+      <div id="logo">Nimbus</div>
+      <div id="logo-sub">Cloud Pad Synth · For The Come Up · Web Audio</div>
+    </div>
+    <div id="hdr-stats">
+      <div class="hstat">Note <span id="hs-note">—</span></div>
+      <div class="hstat">Filter <span id="hs-filter">—</span></div>
+      <div class="hstat">Voices <span id="hs-voices">0</span></div>
+      <div id="power-dot"></div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="xy-section">
+
+      <!-- XY PAD -->
+      <div id="xy-wrap">
+        <div id="xy-pad">
+          <canvas id="trail-canvas"></canvas>
+          <div class="xy-label" id="xy-x-lo">Bright</div>
+          <div class="xy-label" id="xy-x-hi">Dark</div>
+          <div class="xy-label" id="xy-y-lo">Dry</div>
+          <div class="xy-label" id="xy-y-hi">Wet</div>
+          <div id="xy-thumb">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 32 C10 32 6 32 6 28 C6 24 10 22 14 24 C14 18 19 14 25 16 C27 12 33 12 35 16 C39 16 43 20 42 24 C44 26 44 32 40 32 Z"
+                fill="rgba(255,85,0,.12)" stroke="rgba(255,85,0,.7)" stroke-width="1.2" stroke-linejoin="round"/>
+              <circle cx="24" cy="28" r="2.5" fill="rgba(255,85,0,.6)"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- MOD STRIP -->
+      <div id="mod-strip">
+        <div id="mod-fill"></div>
+        <div id="mod-label">Mod · drag horizontally above keys</div>
+        <div id="mod-val">0%</div>
+      </div>
+
+      <!-- KEYBOARD -->
+      <div id="keyboard-section" style="position:relative;">
+        <div id="oct-outer">
+          <div id="oct-wheel"><div id="oct-wheel-inner"></div></div>
+          <div id="oct-lbl">Oct</div>
+        </div>
+        <div id="keyboard"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="wave-bar"><canvas id="wave-canvas"></canvas></div>
+
+  <div id="controls">
+    <!-- Cloud type -->
+    <div style="display:flex;gap:5px;flex-direction:column;">
+      <div style="font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:2px;">Cloud</div>
+      <div style="display:flex;gap:4px;">
+        <button class="cloud-btn active" data-cloud="cumulus">Cumulus</button>
+        <button class="cloud-btn" data-cloud="stratus">Stratus</button>
+        <button class="cloud-btn" data-cloud="cirrus">Cirrus</button>
+        <button class="cloud-btn" data-cloud="storm">Storm</button>
+      </div>
+    </div>
+
+    <div class="cdiv"></div>
+
+    <!-- Vibe -->
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <div style="font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;">Vibe</div>
+      <div style="display:flex;gap:4px;">
+        <button class="vibe-btn active" data-vibe="rise">Rise</button>
+        <button class="vibe-btn" data-vibe="float">Float</button>
+        <button class="vibe-btn" data-vibe="drift">Drift</button>
+        <button class="vibe-btn" data-vibe="ascend">Ascend</button>
+      </div>
+    </div>
+
+    <div class="cdiv"></div>
+
+    <div class="kg">
+      <canvas class="knob" id="k-reverb"  width="42" height="42" data-min="0"   data-max="1"   data-val="0.75" data-color="#ff5500"></canvas>
+      <div class="kl">Space</div><div class="kv" id="v-reverb">0.75</div>
+    </div>
+    <div class="kg">
+      <canvas class="knob" id="k-attack"  width="42" height="42" data-min="0.01" data-max="4"   data-val="0.9"  data-color="#ff8040"></canvas>
+      <div class="kl">Rise</div><div class="kv" id="v-attack">0.90</div>
+    </div>
+    <div class="kg">
+      <canvas class="knob" id="k-release" width="42" height="42" data-min="0.1"  data-max="8"   data-val="3.5"  data-color="#ffb090"></canvas>
+      <div class="kl">Fall</div><div class="kv" id="v-release">3.50</div>
+    </div>
+    <div class="kg">
+      <canvas class="knob" id="k-detune"  width="42" height="42" data-min="0"    data-max="40"  data-val="12"   data-color="#c060ff"></canvas>
+      <div class="kl">Detune</div><div class="kv" id="v-detune">12</div>
+    </div>
+    <div class="kg">
+      <canvas class="knob" id="k-chorus"  width="42" height="42" data-min="0"    data-max="1"   data-val="0.5"  data-color="#4080ff"></canvas>
+      <div class="kl">Chorus</div><div class="kv" id="v-chorus">0.50</div>
+    </div>
+
+    <div class="cdiv"></div>
+
+    <div id="note-display">
+      <div id="note-name">—</div>
+      <div id="freq-display">— Hz</div>
+      <div id="vibe-display">for the come up</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// NIMBUS — Cloud Pad Synth
+// For the come up. For everyone who uploaded to SoundCloud
+// at 2am and believed in it.
+// ══════════════════════════════════════════════════════════════
+
+let actx = null, convolver = null, analyser = null;
+const activeVoices = new Map(); // noteNum → voice obj
+
+// XY state
+let xyActive = false;
+let xyX = 0.3, xyY = 0.6; // filter brightness (x), reverb wet (y)
+let modVal = 0;            // mod strip 0-1
+
+// Trail canvas
+let trailCanvas, trailCtx;
+let trailPoints = [];
+
+function getCtx() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  if (!convolver) buildReverb();
+  if (!analyser) {
+    analyser = actx.createAnalyser(); analyser.fftSize = 512;
+    analyser.connect(actx.destination);
+  }
+  return actx;
+}
+
+const P = {
+  reverb: 0.75, attack: 0.9, release: 3.5, detune: 12, chorus: 0.5,
+  cloud: 'cumulus', vibe: 'rise',
+  filterFreq: 1800,   // controlled by XY X
+  reverbWet: 0.75,    // controlled by XY Y
+  modDepth: 0,        // mod strip
+};
+
+// ── Vibe quotes ──
+const VIBE_QUOTES = {
+  rise:   'for the come up',
+  float:  'above the noise',
+  drift:  'midnight sessions',
+  ascend: 'they gon know the name',
+};
+
+// ══════════════════════════════════════════════════════════════
+// REVERB: infinite sky — long, lush, open
+// ══════════════════════════════════════════════════════════════
+function buildReverb() {
+  const c = actx;
+  const dur = 6.0;
+  const len = c.sampleRate * dur;
+  const buf = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      // Smooth lush tail — no harsh early reflections, pure cloud
+      const env = Math.pow(1 - i/len, 1.1);
+      d[i] = (Math.random()*2-1) * env;
+    }
+  }
+  if (convolver) try { convolver.disconnect(); } catch(e) {}
+  convolver = c.createConvolver(); convolver.buffer = buf;
+  convolver.connect(c.destination);
+}
+
+// ══════════════════════════════════════════════════════════════
+// CLOUD PAD VOICE
+// Layered detuned oscillators + slow filter + chorus
+// ══════════════════════════════════════════════════════════════
+function buildCloudVoice(c, freq, vel, now) {
+  const nodes = [];
+  const master = c.createGain();
+  master.gain.setValueAtTime(0, now);
+
+  // Attack shape per vibe
+  const atk = P.attack;
+  const vibeShapes = {
+    rise:   () => { master.gain.linearRampToValueAtTime(vel * 0.7, now + atk); },
+    float:  () => { master.gain.setTargetAtTime(vel * 0.65, now, atk * 0.5); },
+    drift:  () => {
+      master.gain.linearRampToValueAtTime(vel * 0.3, now + atk * 0.3);
+      master.gain.linearRampToValueAtTime(vel * 0.7, now + atk);
+    },
+    ascend: () => {
+      master.gain.exponentialRampToValueAtTime(0.001, now + 0.01);
+      master.gain.linearRampToValueAtTime(vel * 0.75, now + atk * 1.2);
+    },
+  };
+  (vibeShapes[P.vibe] || vibeShapes.rise)();
+
+  // ── CLOUD TYPE: oscillator blend ──
+  const configs = {
+    cumulus: [
+      // Warm, full, billowing — classic lush pad
+      { type:'triangle', detMult:0,    amp:0.55 },
+      { type:'sine',     detMult:1,    amp:0.35 },
+      { type:'triangle', detMult:-1,   amp:0.35 },
+      { type:'sine',     detMult:0.5,  amp:0.20 },
+      { type:'triangle', detMult:-0.5, amp:0.20 },
+      { type:'sine',     detMult:2,    amp:0.12 },
+      { type:'sine',     detMult:-2,   amp:0.12 },
+    ],
+    stratus: [
+      // Flat, horizontal, grey — subtle and wide
+      { type:'sine',     detMult:0,    amp:0.60 },
+      { type:'sine',     detMult:0.3,  amp:0.45 },
+      { type:'sine',     detMult:-0.3, amp:0.45 },
+      { type:'triangle', detMult:1,    amp:0.20 },
+      { type:'triangle', detMult:-1,   amp:0.20 },
+    ],
+    cirrus: [
+      // High, thin, icy — bright and delicate
+      { type:'sine',     detMult:0,    amp:0.45 },
+      { type:'triangle', detMult:2,    amp:0.35 },
+      { type:'triangle', detMult:-2,   amp:0.35 },
+      { type:'sine',     detMult:4,    amp:0.18 },
+      { type:'sine',     detMult:-4,   amp:0.18 },
+      // Add octave shimmer
+      { type:'sine',     detMult:0,    amp:0.12, octMult:2 },
+    ],
+    storm: [
+      // Dense, dark, churning — distorted and massive
+      { type:'sawtooth', detMult:0,    amp:0.50 },
+      { type:'sawtooth', detMult:1,    amp:0.35 },
+      { type:'sawtooth', detMult:-1,   amp:0.35 },
+      { type:'square',   detMult:0.5,  amp:0.18 },
+      { type:'square',   detMult:-0.5, amp:0.18 },
+      { type:'sawtooth', detMult:3,    amp:0.12 },
+      { type:'sawtooth', detMult:-3,   amp:0.12 },
+    ],
+  };
+
+  const oscConfigs = configs[P.cloud] || configs.cumulus;
+
+  oscConfigs.forEach(cfg => {
+    const osc = c.createOscillator();
+    osc.type = cfg.type;
+    const oscFreq = freq * (cfg.octMult || 1);
+    osc.frequency.value = oscFreq;
+    osc.detune.value = (cfg.detMult * P.detune) + (Math.random()-0.5) * 1.5;
+
+    // Slow LFO on detune for the "cloud drift" movement
+    const lfo = c.createOscillator();
+    lfo.frequency.value = 0.15 + Math.random() * 0.12;
+    const lfoG = c.createGain();
+    lfoG.gain.value = P.detune * 0.3 + P.modDepth * 8;
+    lfo.connect(lfoG); lfoG.connect(osc.detune);
+
+    const og = c.createGain(); og.gain.value = cfg.amp / oscConfigs.length * 1.8;
+    osc.connect(og); og.connect(master);
+    osc.start(now); lfo.start(now);
+    nodes.push(osc, lfo);
+  });
+
+  // ── FILTER (XY X-axis: tone) ──
+  const lpf = c.createBiquadFilter(); lpf.type = 'lowpass';
+  lpf.frequency.value = P.filterFreq;
+  lpf.Q.value = P.cloud === 'storm' ? 2.5 : 0.8;
+
+  // Filter envelope — slow open on attack
+  lpf.frequency.setValueAtTime(200, now);
+  lpf.frequency.exponentialRampToValueAtTime(P.filterFreq, now + atk * 0.8);
+
+  // Filter LFO (subtle breathe)
+  const filtLFO = c.createOscillator();
+  filtLFO.frequency.value = 0.08 + Math.random() * 0.04;
+  const filtLFOG = c.createGain();
+  filtLFOG.gain.value = P.filterFreq * 0.12;
+  filtLFO.connect(filtLFOG); filtLFOG.connect(lpf.frequency);
+  filtLFO.start(now); nodes.push(filtLFO);
+
+  master.connect(lpf);
+
+  // ── CHORUS / WIDTH ──
+  let chorusSend = lpf;
+  if (P.chorus > 0.05) {
+    const chorusDelay = c.createDelay(0.05);
+    chorusDelay.delayTime.value = 0.022;
+    const chorusLFO = c.createOscillator();
+    chorusLFO.frequency.value = 0.4 + Math.random() * 0.2;
+    const chorusLFOG = c.createGain();
+    chorusLFOG.gain.value = 0.008 * P.chorus;
+    chorusLFO.connect(chorusLFOG); chorusLFOG.connect(chorusDelay.delayTime);
+    const chorusWet = c.createGain(); chorusWet.gain.value = P.chorus * 0.5;
+    lpf.connect(chorusDelay); chorusDelay.connect(chorusWet); chorusWet.connect(lpf);
+    chorusLFO.start(now); nodes.push(chorusLFO);
+  }
+
+  // ── STORM extra: waveshaper grit ──
+  let finalNode = lpf;
+  if (P.cloud === 'storm') {
+    const ws = c.createWaveShaper();
+    const k = 15;
+    const curve = new Float32Array(256);
+    for (let i=0;i<256;i++) { const x=i*2/256-1; curve[i]=(Math.PI+k)*x/(Math.PI+k*Math.abs(x)); }
+    ws.curve = curve;
+    const wsG = c.createGain(); wsG.gain.value = 0.6;
+    lpf.connect(ws); ws.connect(wsG); wsG.connect(lpf);
+  }
+
+  // ── ROUTE ──
+  const dry = c.createGain(); dry.gain.value = 1 - P.reverbWet * 0.88;
+  const wet = c.createGain(); wet.gain.value = P.reverbWet * 0.88;
+  lpf.connect(dry); dry.connect(analyser);
+  lpf.connect(wet); wet.connect(convolver);
+
+  return { master, lpf, nodes, dry, wet };
+}
+
+function startNote(noteNum, vel=0.7) {
+  if (activeVoices.has(noteNum)) return;
+  const c = getCtx();
+  const freq = midiToFreq(noteNum);
+  const now = c.currentTime;
+  const voice = buildCloudVoice(c, freq, vel, now);
+  activeVoices.set(noteNum, voice);
+  updateDisplay(noteNum, freq);
+  document.getElementById('hs-voices').textContent = activeVoices.size;
+  document.getElementById('hs-voices').className = 'lit';
+  document.getElementById('power-dot').classList.add('on');
+}
+
+function stopNote(noteNum) {
+  const voice = activeVoices.get(noteNum);
+  if (!voice) return;
+  const c = actx; const now = c.currentTime;
+  const rel = P.release;
+  voice.master.gain.setTargetAtTime(0, now, rel * 0.35);
+  voice.lpf.frequency.exponentialRampToValueAtTime(200, now + rel * 0.5);
+  setTimeout(() => {
+    voice.nodes.forEach(n => { try { n.stop(); } catch(e){} });
+    try { voice.master.disconnect(); voice.dry.disconnect(); voice.wet.disconnect(); voice.lpf.disconnect(); } catch(e){}
+  }, (rel * 1.2 + 0.5) * 1000);
+  activeVoices.delete(noteNum);
+  document.getElementById('hs-voices').textContent = activeVoices.size;
+  if (activeVoices.size === 0) {
+    document.getElementById('power-dot').classList.remove('on');
+    document.getElementById('hs-voices').className = '';
+  }
+}
+
+// ── XY PAD ──
+function setupXYPad() {
+  const pad = document.getElementById('xy-pad');
+  const thumb = document.getElementById('xy-thumb');
+  trailCanvas = document.getElementById('trail-canvas');
+  trailCtx = trailCanvas.getContext('2d');
+
+  function resizeTrail() {
+    trailCanvas.width = pad.offsetWidth;
+    trailCanvas.height = pad.offsetHeight;
+  }
+  resizeTrail();
+  window.addEventListener('resize', resizeTrail);
+
+  function updateXY(x, y) {
+    const rect = pad.getBoundingClientRect();
+    const px = Math.max(0, Math.min(1, (x - rect.left) / rect.width));
+    const py = Math.max(0, Math.min(1, (y - rect.top)  / rect.height));
+    xyX = px; xyY = py;
+
+    // X = filter brightness (left=bright, right=dark)
+    P.filterFreq = 400 + (1 - px) * 7600;
+    // Y = reverb wet (top=wet, bottom=dry)
+    P.reverbWet  = 1 - py;
+
+    // Update filter on active voices
+    activeVoices.forEach(v => {
+      v.lpf.frequency.setTargetAtTime(P.filterFreq, actx.currentTime, 0.05);
+      v.dry.gain.setTargetAtTime(1 - P.reverbWet * 0.88, actx.currentTime, 0.05);
+      v.wet.gain.setTargetAtTime(P.reverbWet * 0.88, actx.currentTime, 0.05);
+    });
+
+    // Position thumb
+    thumb.style.left = (px * 100) + '%';
+    thumb.style.top  = (py * 100) + '%';
+
+    // Update header
+    document.getElementById('hs-filter').textContent = Math.round(P.filterFreq) + 'Hz';
+    document.getElementById('hs-filter').className = 'lit';
+
+    // Trail
+    trailPoints.push({ x: px * trailCanvas.width, y: py * trailCanvas.height, t: Date.now() });
+    if (trailPoints.length > 80) trailPoints.shift();
+  }
+
+  function addRipple(x, y) {
+    const rect = pad.getBoundingClientRect();
+    const div = document.createElement('div');
+    div.className = 'xy-ripple';
+    div.style.left = (x - rect.left) + 'px';
+    div.style.top  = (y - rect.top)  + 'px';
+    pad.appendChild(div);
+    setTimeout(() => div.remove(), 850);
+  }
+
+  pad.addEventListener('mousedown', e => {
+    xyActive = true; thumb.classList.add('active');
+    getCtx(); updateXY(e.clientX, e.clientY); addRipple(e.clientX, e.clientY);
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e => { if (xyActive) updateXY(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', () => { xyActive = false; thumb.classList.remove('active'); });
+
+  pad.addEventListener('touchstart', e => {
+    xyActive = true; thumb.classList.add('active'); getCtx();
+    updateXY(e.touches[0].clientX, e.touches[0].clientY);
+    addRipple(e.touches[0].clientX, e.touches[0].clientY);
+    e.preventDefault();
+  }, {passive:false});
+  window.addEventListener('touchmove', e => { if (xyActive) updateXY(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
+  window.addEventListener('touchend', () => { xyActive = false; thumb.classList.remove('active'); });
+
+  // Position thumb at initial XY
+  thumb.style.left = (xyX * 100) + '%';
+  thumb.style.top  = ((1-xyY) * 100) + '%';
+
+  // Trail draw loop
+  function drawTrail() {
+    requestAnimationFrame(drawTrail);
+    const now = Date.now();
+    trailCtx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+    if (trailPoints.length < 2) return;
+    for (let i = 1; i < trailPoints.length; i++) {
+      const p0 = trailPoints[i-1], p1 = trailPoints[i];
+      const age = (now - p1.t) / 1800;
+      if (age > 1) continue;
+      const alpha = (1 - age) * 0.35;
+      trailCtx.beginPath();
+      trailCtx.moveTo(p0.x, p0.y);
+      trailCtx.lineTo(p1.x, p1.y);
+      trailCtx.strokeStyle = `rgba(255,85,0,${alpha})`;
+      trailCtx.lineWidth = 2 * (1 - age);
+      trailCtx.lineCap = 'round';
+      trailCtx.stroke();
+    }
+    // Trim old points
+    trailPoints = trailPoints.filter(p => (now - p.t) < 2000);
+  }
+  drawTrail();
+}
+
+// ── MOD STRIP ──
+function setupModStrip() {
+  const strip = document.getElementById('mod-strip');
+  let modDragging = false, modStartX = 0;
+
+  function updateMod(x) {
+    const rect = strip.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (x - rect.left) / rect.width));
+    modVal = pct; P.modDepth = pct;
+    document.getElementById('mod-fill').style.width = (pct * 100) + '%';
+    document.getElementById('mod-val').textContent = Math.round(pct * 100) + '%';
+  }
+
+  strip.addEventListener('mousedown', e => { modDragging = true; getCtx(); updateMod(e.clientX); e.preventDefault(); });
+  window.addEventListener('mousemove', e => { if (modDragging) updateMod(e.clientX); });
+  window.addEventListener('mouseup', () => { modDragging = false; });
+  strip.addEventListener('touchstart', e => { modDragging = true; getCtx(); updateMod(e.touches[0].clientX); e.preventDefault(); }, {passive:false});
+  window.addEventListener('touchmove', e => { if (modDragging) updateMod(e.touches[0].clientX); }, {passive:false});
+  window.addEventListener('touchend', () => { modDragging = false; });
+}
+
+// ── DISPLAY ──
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function midiToFreq(n) { return 440 * Math.pow(2, (n-69)/12); }
+
+function updateDisplay(noteNum, freq) {
+  document.getElementById('note-name').textContent = NOTE_NAMES[noteNum%12];
+  document.getElementById('freq-display').textContent = freq.toFixed(1) + ' Hz';
+  document.getElementById('hs-note').textContent = NOTE_NAMES[noteNum%12] + Math.floor(noteNum/12-1);
+  document.getElementById('hs-note').className = 'lit';
+  document.getElementById('vibe-display').textContent = VIBE_QUOTES[P.vibe];
+}
+
+// ── KEYBOARD ──
+const WHITE_KEYS  = [0,2,4,5,7,9,11];
+const BLACK_SLOTS = [1,3,null,6,8,10,null];
+const KB_WHITE = {a:0,s:1,d:2,f:3,g:4,h:5,j:6,k:7};
+const KB_BLACK = {w:0,e:1,t:3,y:4,u:5};
+let kbOctave = 4;
+const KB_OCT_MIN=1,KB_OCT_MAX=7,KB_SLOT_H=18;
+
+function buildKeyboard() {
+  const el = document.getElementById('keyboard'); el.innerHTML='';
+  const base=kbOctave*12+12;
+  for(let i=0;i<8;i++){
+    const n=base+WHITE_KEYS[i%7];
+    const wk=document.createElement('div');
+    wk.className='key white';wk.dataset.note=n;
+    wk.innerHTML=`<span class="key-lbl">${['A','S','D','F','G','H','J','K'][i]}</span>`;
+    el.appendChild(wk);
+  }
+  requestAnimationFrame(()=>{
+    el.querySelectorAll('.key.white').forEach((wk,i)=>{
+      const slot=BLACK_SLOTS[i%7];if(slot==null)return;
+      const n=base+slot;
+      const bk=document.createElement('div');bk.className='key black';bk.dataset.note=n;
+      bk.style.left=(wk.offsetLeft+wk.offsetWidth*0.6)+'px';
+      const lbls=['W','E','','T','Y','U',''];
+      if(lbls[i])bk.innerHTML=`<span class="key-lbl">${lbls[i]}</span>`;
+      el.appendChild(bk);
+    });
+    el.querySelectorAll('.key').forEach(k=>{
+      const n=parseInt(k.dataset.note);
+      k.addEventListener('mousedown', e=>{e.preventDefault();getCtx();startNote(n);k.classList.add('active');});
+      k.addEventListener('mouseup',   ()=>{stopNote(n);k.classList.remove('active');});
+      k.addEventListener('mouseleave',()=>{if(activeVoices.has(n)){stopNote(n);k.classList.remove('active');}});
+      k.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();getCtx();startNote(n);k.classList.add('active');},{passive:false});
+      k.addEventListener('touchend',  e=>{e.preventDefault();stopNote(n);k.classList.remove('active');},{passive:false});
+    });
+  });
+}
+
+function buildOctWheel(){
+  const inner=document.getElementById('oct-wheel-inner');inner.innerHTML='';
+  for(let o=KB_OCT_MAX;o>=KB_OCT_MIN;o--){
+    const s=document.createElement('div');
+    s.className='ow-slot'+(o===kbOctave?' cur':'');
+    s.textContent='C'+o;s.dataset.oct=o;inner.appendChild(s);
+  }
+  scrollOctWheel();
+}
+function scrollOctWheel(){
+  const inner=document.getElementById('oct-wheel-inner');
+  const wH=document.getElementById('oct-wheel').clientHeight||80;
+  inner.style.transform=`translateY(${wH/2-KB_SLOT_H/2-(KB_OCT_MAX-kbOctave)*KB_SLOT_H}px)`;
+  inner.querySelectorAll('.ow-slot').forEach(s=>s.classList.toggle('cur',parseInt(s.dataset.oct)===kbOctave));
+}
+(function(){
+  const wheel=document.getElementById('oct-wheel');let sy=null,so=null;
+  wheel.addEventListener('mousedown',e=>{sy=e.clientY;so=kbOctave;e.preventDefault();});
+  document.addEventListener('mousemove',e=>{
+    if(sy===null)return;
+    const d=Math.round((sy-e.clientY)/KB_SLOT_H);
+    const n=Math.max(KB_OCT_MIN,Math.min(KB_OCT_MAX,so+d));
+    if(n!==kbOctave){kbOctave=n;scrollOctWheel();buildKeyboard();}
+  });
+  document.addEventListener('mouseup',()=>{sy=null;});
+  wheel.addEventListener('wheel',e=>{
+    e.preventDefault();
+    kbOctave=Math.max(KB_OCT_MIN,Math.min(KB_OCT_MAX,kbOctave+(e.deltaY>0?-1:1)));
+    scrollOctWheel();buildKeyboard();
+  },{passive:false});
+  wheel.addEventListener('click',e=>{
+    const s=e.target.closest('.ow-slot');
+    if(s){kbOctave=parseInt(s.dataset.oct);scrollOctWheel();buildKeyboard();}
+  });
+})();
+
+document.addEventListener('keydown',e=>{
+  if(e.repeat||e.target.tagName==='INPUT')return;
+  const key=e.key.toLowerCase();
+  if(key==='z'){kbOctave=Math.max(KB_OCT_MIN,kbOctave-1);scrollOctWheel();buildKeyboard();return;}
+  if(key==='x'){kbOctave=Math.min(KB_OCT_MAX,kbOctave+1);scrollOctWheel();buildKeyboard();return;}
+  const base=kbOctave*12+12;let n=null;
+  if(KB_WHITE[key]!==undefined)n=base+WHITE_KEYS[KB_WHITE[key]];
+  else if(KB_BLACK[key]!==undefined){const s=BLACK_SLOTS[KB_BLACK[key]];if(s!=null)n=base+s;}
+  if(n!==null&&!activeVoices.has(n)){
+    getCtx();startNote(n);
+    document.getElementById('keyboard')?.querySelectorAll('.key').forEach(k=>{if(parseInt(k.dataset.note)===n)k.classList.add('active');});
+  }
+});
+document.addEventListener('keyup',e=>{
+  const key=e.key.toLowerCase();const base=kbOctave*12+12;let n=null;
+  if(KB_WHITE[key]!==undefined)n=base+WHITE_KEYS[KB_WHITE[key]];
+  else if(KB_BLACK[key]!==undefined){const s=BLACK_SLOTS[KB_BLACK[key]];if(s!=null)n=base+s;}
+  if(n!==null){
+    stopNote(n);
+    document.getElementById('keyboard')?.querySelectorAll('.key').forEach(k=>{if(parseInt(k.dataset.note)===n)k.classList.remove('active');});
+  }
+});
+
+// ── CLOUD / VIBE BUTTONS ──
+document.querySelectorAll('.cloud-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.cloud-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); P.cloud=btn.dataset.cloud;
+  });
+});
+document.querySelectorAll('.vibe-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.vibe-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); P.vibe=btn.dataset.vibe;
+    document.getElementById('vibe-display').textContent = VIBE_QUOTES[P.vibe];
+  });
+});
+
+// ── KNOBS ──
+function setupKnobs(){
+  document.querySelectorAll('canvas.knob').forEach(canvas=>{
+    const id=canvas.id,min=parseFloat(canvas.dataset.min),max=parseFloat(canvas.dataset.max);
+    let val=parseFloat(canvas.dataset.val);
+    const color=canvas.dataset.color||'#ff5500';
+    const valEl=document.getElementById('v-'+id.replace('k-',''));
+    function draw(){
+      const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height,cx=w/2,cy=h/2,r=w*0.38;
+      ctx.clearRect(0,0,w,h);
+      const sA=Math.PI*0.75,eA=Math.PI*2.25,t=(val-min)/(max-min),cA=sA+t*(eA-sA);
+      ctx.beginPath();ctx.arc(cx,cy,r,sA,eA);ctx.strokeStyle='#2a2438';ctx.lineWidth=3;ctx.lineCap='round';ctx.stroke();
+      ctx.beginPath();ctx.arc(cx,cy,r,sA,cA);ctx.strokeStyle=color;ctx.lineWidth=3;ctx.stroke();
+      const dx=cx+r*Math.cos(cA),dy=cy+r*Math.sin(cA);
+      ctx.beginPath();ctx.arc(dx,dy,2.5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+      ctx.beginPath();ctx.arc(cx,cy,3,0,Math.PI*2);ctx.fillStyle='#1e1830';ctx.fill();
+      ctx.beginPath();ctx.arc(cx,cy,1.5,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+    }
+    let dragY=null,dragVal=null;
+    canvas.addEventListener('mousedown',e=>{dragY=e.clientY;dragVal=val;e.preventDefault();});
+    document.addEventListener('mousemove',e=>{
+      if(dragY===null)return;
+      val=Math.max(min,Math.min(max,dragVal+(dragY-e.clientY)*(max-min)/120));
+      draw();onKnob(id,val,valEl);
+    });
+    document.addEventListener('mouseup',()=>{dragY=null;});
+    draw();onKnob(id,val,valEl);
+  });
+}
+function onKnob(id,val,el){
+  const map={
+    'k-reverb':  v=>{P.reverb=v;  P.reverbWet=v; el.textContent=v.toFixed(2);},
+    'k-attack':  v=>{P.attack=v;  el.textContent=v.toFixed(2);},
+    'k-release': v=>{P.release=v; el.textContent=v.toFixed(2);},
+    'k-detune':  v=>{P.detune=v;  el.textContent=Math.round(v);},
+    'k-chorus':  v=>{P.chorus=v;  el.textContent=v.toFixed(2);},
+  };
+  if(map[id])map[id](val);
+}
+
+// ── WAVEFORM ──
+const waveCanvas=document.getElementById('wave-canvas');
+const wCtx=waveCanvas.getContext('2d');
+function resizeWave(){waveCanvas.width=waveCanvas.offsetWidth;waveCanvas.height=waveCanvas.offsetHeight;}
+function drawWave(){
+  requestAnimationFrame(drawWave);
+  const W=waveCanvas.width,H=waveCanvas.height;
+  wCtx.clearRect(0,0,W,H);
+  if(!analyser)return;
+  const buf=new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteTimeDomainData(buf);
+  // gradient line: cloud orange to sky blue
+  const grad=wCtx.createLinearGradient(0,0,W,0);
+  grad.addColorStop(0,'rgba(255,85,0,.6)');
+  grad.addColorStop(0.5,'rgba(255,160,32,.5)');
+  grad.addColorStop(1,'rgba(64,128,255,.5)');
+  wCtx.strokeStyle=grad;wCtx.lineWidth=1.2;
+  wCtx.shadowColor='#ff5500';wCtx.shadowBlur=5;
+  wCtx.beginPath();
+  const step=W/buf.length;
+  for(let i=0;i<buf.length;i++){const x=i*step,y=(buf[i]/128-1)*(H*0.42)+H/2;i===0?wCtx.moveTo(x,y):wCtx.lineTo(x,y);}
+  wCtx.stroke();wCtx.shadowBlur=0;
+}
+
+// ── ATMOSPHERE: cloud wisps drifting across ──
+const atmosCanvas=document.getElementById('atmos');
+const aCtx=atmosCanvas.getContext('2d');
+let cloudParticles=[];
+function initAtmos(){
+  atmosCanvas.width=window.innerWidth;atmosCanvas.height=window.innerHeight;
+  cloudParticles=Array.from({length:22},()=>({
+    x: Math.random()*atmosCanvas.width,
+    y: Math.random()*atmosCanvas.height,
+    rx: Math.random()*60+30,   // cloud width
+    ry: Math.random()*20+10,   // cloud height
+    sp: Math.random()*0.12+0.02,
+    o:  Math.random()*0.06+0.01,
+    // color: orange-cloud or sky-blue
+    hue: Math.random()>0.6 ? 'rgba(255,85,0,' : Math.random()>0.5 ? 'rgba(255,160,32,' : 'rgba(64,120,255,',
+  }));
+}
+function drawAtmos(){
+  requestAnimationFrame(drawAtmos);
+  aCtx.clearRect(0,0,atmosCanvas.width,atmosCanvas.height);
+  cloudParticles.forEach(p=>{
+    p.x += p.sp * 0.4; // drift rightward — clouds moving
+    if(p.x > atmosCanvas.width + p.rx) p.x = -p.rx;
+    aCtx.beginPath();
+    aCtx.ellipse(p.x, p.y, p.rx, p.ry, 0, 0, Math.PI*2);
+    aCtx.fillStyle = p.hue + p.o + ')';
+    aCtx.fill();
+  });
+}
+
+// ── CURSOR ──
+const cursor=document.getElementById('cursor');
+document.addEventListener('mousemove',e=>{cursor.style.left=e.clientX+'px';cursor.style.top=e.clientY+'px';});
+
+window.addEventListener('resize',()=>{resizeWave();initAtmos();buildKeyboard();});
+
+setupKnobs();
+setupXYPad();
+setupModStrip();
+resizeWave();
+initAtmos();
+drawAtmos();
+drawWave();
+buildKeyboard();
+buildOctWheel();
+</script>
+</body>
+</html>
